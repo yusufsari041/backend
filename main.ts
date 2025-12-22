@@ -40,16 +40,13 @@ async function bootstrap() {
   app.useGlobalFilters(new AllExceptionsFilter());
   app.useGlobalInterceptors(new TransformInterceptor());
   
-  const port = process.env.PORT || 3001;
-  await app.listen(port);
-  console.log(`Backend API çalışıyor: http://localhost:${port}`);
-  
-  // Wait for database to be ready before querying
+  // Wait for database to be ready before starting the server
   // Use a retry mechanism to ensure the database is synchronized
   const dataSource = app.get(DataSource);
   let retries = 0;
   const maxRetries = 10;
   
+  console.log('Veritabanı hazırlanıyor...');
   while (retries < maxRetries) {
     try {
       // Ensure database connection is initialized
@@ -78,7 +75,10 @@ async function bootstrap() {
         });
         await userRepository.save(admin);
         console.log(`Admin kullanıcısı otomatik oluşturuldu: ${adminEmail} / ${adminPassword}`);
+      } else {
+        console.log('Admin kullanıcısı zaten mevcut.');
       }
+      console.log('Veritabanı hazır!');
       break; // Success, exit retry loop
     } catch (error: any) {
       retries++;
@@ -95,6 +95,11 @@ async function bootstrap() {
       break;
     }
   }
+  
+  // Start the server after database is ready
+  const port = process.env.PORT || 3001;
+  await app.listen(port);
+  console.log(`Backend API çalışıyor: http://localhost:${port}`);
   
   const jwtSecret = process.env.JWT_SECRET || 'telefoncu-secret-key';
   if (jwtSecret === 'telefoncu-secret-key' && process.env.NODE_ENV === 'production') {
