@@ -44,15 +44,27 @@ async function bootstrap() {
   await app.listen(port);
   console.log(`Backend API çalışıyor: http://localhost:${port}`);
   
-  setTimeout(async () => {
+  // Wait for database to be ready before querying
+  // Use a retry mechanism to ensure the database is synchronized
+  const dataSource = app.get(DataSource);
+  let retries = 0;
+  const maxRetries = 10;
+  
+  while (retries < maxRetries) {
     try {
-      const dataSource = app.get(DataSource);
+      // Ensure database connection is initialized
+      if (!dataSource.isInitialized) {
+        await dataSource.initialize();
+      }
+      
+      // Try to query the database to ensure tables exist
       const userRepository = dataSource.getRepository(User);
       const adminEmail = process.env.ADMIN_EMAIL || 'admin@example.com';
       const existingAdmin = await userRepository.findOne({ 
         where: { email: adminEmail.toLowerCase() } 
       });
 
+      // If we got here, the table exists - create admin if needed
       if (!existingAdmin) {
         const adminPassword = process.env.ADMIN_PASSWORD || '123456';
         const sifre_hash = await bcrypt.hash(adminPassword, 10);
@@ -67,10 +79,22 @@ async function bootstrap() {
         await userRepository.save(admin);
         console.log(`Admin kullanıcısı otomatik oluşturuldu: ${adminEmail} / ${adminPassword}`);
       }
+      break; // Success, exit retry loop
     } catch (error: any) {
+      retries++;
+      if (error?.code === 'SQLITE_ERROR' && error?.message?.includes('no such table')) {
+        // Table doesn't exist yet, wait and retry
+        if (retries < maxRetries) {
+          console.log(`Veritabanı tabloları henüz hazır değil, bekleniyor... (${retries}/${maxRetries})`);
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          continue;
+        }
+      }
+      // Other errors or max retries reached
       console.error('Admin oluşturma hatası:', error?.message || error);
+      break;
     }
-  }, 3000);
+  }
   
   const jwtSecret = process.env.JWT_SECRET || 'telefoncu-secret-key';
   if (jwtSecret === 'telefoncu-secret-key' && process.env.NODE_ENV === 'production') {
