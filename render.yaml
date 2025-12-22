@@ -1,12 +1,13 @@
 services:
   - type: web
-    name: backend
+    name: frontend
     env: node
-    buildCommand: npm install --include=dev && npm run build
-    startCommand: npm run start:prod
+    buildCommand: npm install && npm run build
+    startCommand: npm run preview
     envVars:
       - key: NODE_ENV
         value: production
-      - key: PORT
-        value: 3001
+      - key: VITE_API_URL
+        value: https://backend-x49x.onrender.com
+    staticPublishPath: ./dist
 
