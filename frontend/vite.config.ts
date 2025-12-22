@@ -16,6 +16,11 @@ export default defineConfig({
   preview: {
     port: process.env.PORT || 4173,
     host: true,
+    allowedHosts: [
+      'frontend-g5op.onrender.com',
+      '.onrender.com',
+      'localhost',
+    ],
   },
   build: {
     outDir: 'dist',
