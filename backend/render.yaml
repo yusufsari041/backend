@@ -2,7 +2,7 @@ services:
   - type: web
     name: backend
     env: node
-    rootDir: /
+    rootDir: /backend
     buildCommand: npm install --include=dev && npm run build
     startCommand: npm run start:prod
     envVars:
