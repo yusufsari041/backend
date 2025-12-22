@@ -2,7 +2,7 @@ services:
   - type: web
     name: frontend
     env: node
-    rootDir: /frontend
+    rootDir: frontend
     buildCommand: npm install && npm run build
     startCommand: npm run preview
     envVars:
