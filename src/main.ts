@@ -40,36 +40,71 @@ async function bootstrap() {
   app.useGlobalFilters(new AllExceptionsFilter());
   app.useGlobalInterceptors(new TransformInterceptor());
   
+  // Wait for database to be ready before starting the server
+  // Use a retry mechanism to ensure the database is synchronized
   const dataSource = app.get(DataSource);
-  const userRepository = dataSource.getRepository(User);
-  const adminEmail = process.env.ADMIN_EMAIL || 'admin@example.com';
-  const existingAdmin = await userRepository.findOne({ 
-    where: { email: adminEmail.toLowerCase() } 
-  });
+  let retries = 0;
+  const maxRetries = 10;
+  
+  console.log('Veritabanı hazırlanıyor...');
+  while (retries < maxRetries) {
+    try {
+      // Ensure database connection is initialized
+      if (!dataSource.isInitialized) {
+        await dataSource.initialize();
+      }
+      
+      // Try to query the database to ensure tables exist
+      const userRepository = dataSource.getRepository(User);
+      const adminEmail = process.env.ADMIN_EMAIL || 'admin@example.com';
+      const existingAdmin = await userRepository.findOne({ 
+        where: { email: adminEmail.toLowerCase() } 
+      });
 
-  if (!existingAdmin) {
-    const adminPassword = process.env.ADMIN_PASSWORD || '123456';
-    const sifre_hash = await bcrypt.hash(adminPassword, 10);
-    const admin = userRepository.create({
-      ad_soyad: 'Admin',
-      email: adminEmail.toLowerCase(),
-      sifre_hash,
-      rol: UserRole.ADMIN,
-      aktif_mi: true,
-      ilk_giris: true,
-    });
-    await userRepository.save(admin);
-    console.log(`Admin kullanıcısı otomatik oluşturuldu: ${adminEmail} / ${adminPassword}`);
+      // If we got here, the table exists - create admin if needed
+      if (!existingAdmin) {
+        const adminPassword = process.env.ADMIN_PASSWORD || '123456';
+        const sifre_hash = await bcrypt.hash(adminPassword, 10);
+        const admin = userRepository.create({
+          ad_soyad: 'Admin',
+          email: adminEmail.toLowerCase(),
+          sifre_hash,
+          rol: UserRole.ADMIN,
+          aktif_mi: true,
+          ilk_giris: true,
+        });
+        await userRepository.save(admin);
+        console.log(`Admin kullanıcısı otomatik oluşturuldu: ${adminEmail} / ${adminPassword}`);
+      } else {
+        console.log('Admin kullanıcısı zaten mevcut.');
+      }
+      console.log('Veritabanı hazır!');
+      break; // Success, exit retry loop
+    } catch (error: any) {
+      retries++;
+      if (error?.code === 'SQLITE_ERROR' && error?.message?.includes('no such table')) {
+        // Table doesn't exist yet, wait and retry
+        if (retries < maxRetries) {
+          console.log(`Veritabanı tabloları henüz hazır değil, bekleniyor... (${retries}/${maxRetries})`);
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          continue;
+        }
+      }
+      // Other errors or max retries reached
+      console.error('Admin oluşturma hatası:', error?.message || error);
+      break;
+    }
   }
+  
+  // Start the server after database is ready
+  const port = process.env.PORT || 3001;
+  await app.listen(port);
+  console.log(`Backend API çalışıyor: http://localhost:${port}`);
   
   const jwtSecret = process.env.JWT_SECRET || 'telefoncu-secret-key';
   if (jwtSecret === 'telefoncu-secret-key' && process.env.NODE_ENV === 'production') {
     console.warn('⚠️  UYARI: Production ortamında varsayılan JWT_SECRET kullanılıyor! Güvenlik riski var!');
   }
-
-  const port = process.env.PORT || 3001;
-  await app.listen(port);
-  console.log(`Backend API çalışıyor: http://localhost:${port}`);
 }
 
 bootstrap();
