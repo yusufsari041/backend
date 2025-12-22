@@ -20,7 +20,11 @@ if (!existsSync(dataDir)) {
 export const DatabaseConfig: TypeOrmModuleOptions = {
   type: 'sqlite',
   database: join(dataDir, 'telefoncu.db'),
-  entities: [join(__dirname, '..', '**', '*.entity{.ts,.js}')],
+  // Use both .ts and .js paths for development and production
+  entities: [
+    join(__dirname, '..', '**', '*.entity{.ts,.js}'),
+    join(process.cwd(), 'dist', '**', '*.entity.js'),
+  ],
   synchronize: true, // Auto-create tables (use migrations in production for better control)
   logging: process.env.NODE_ENV === 'development',
   // Add connection options for better reliability
