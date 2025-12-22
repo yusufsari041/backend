@@ -1,0 +1,55 @@
+{
+  "name": "sari-iletisim-frontend",
+  "version": "1.0.0",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "build:electron": "electron-builder",
+    "electron": "electron electron/main.cjs",
+    "electron:dev": "concurrently \"npm run dev\" \"wait-on http://localhost:5173 && electron electron/main.cjs\"",
+    "build:mobile": "npm run build && npx cap sync",
+    "ios:dev": "npm run build:mobile && npx cap open ios",
+    "android:dev": "npm run build:mobile && npx cap open android",
+    "ios:build": "npm run build:mobile && cd ios && xcodebuild",
+    "android:build": "npm run build:mobile && cd android && gradlew.bat assembleRelease",
+    "android:build:apk": "npm run build:mobile && cd android && gradlew.bat assembleRelease",
+    "android:build:aab": "npm run build:mobile && cd android && gradlew.bat bundleRelease",
+    "android:apk": "npm run android:build:apk",
+    "android:aab": "npm run android:build:aab"
+  },
+  "dependencies": {
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-router-dom": "^6.21.0",
+    "axios": "^1.6.2",
+    "lucide-react": "^0.303.0",
+    "react-toastify": "^9.1.3",
+    "@capacitor/core": "^5.5.1",
+    "@capacitor/app": "^5.0.6",
+    "@capacitor/haptics": "^5.0.6",
+    "@capacitor/keyboard": "^5.0.6",
+    "@capacitor/status-bar": "^5.0.6",
+    "@capacitor/splash-screen": "^5.0.6",
+    "@capacitor/ios": "^5.5.1",
+    "@capacitor/android": "^5.5.1"
+  },
+  "devDependencies": {
+    "@types/react": "^18.2.43",
+    "@types/react-dom": "^18.2.17",
+    "@vitejs/plugin-react": "^4.2.1",
+    "typescript": "^5.3.3",
+    "vite": "^5.0.8",
+    "electron": "^28.0.0",
+    "electron-builder": "^24.9.1",
+    "concurrently": "^8.2.2",
+    "wait-on": "^7.2.0",
+    "tailwindcss": "^3.4.1",
+    "autoprefixer": "^10.4.16",
+    "postcss": "^8.4.32",
+    "@capacitor/cli": "^5.5.1"
+  }
+}
+
