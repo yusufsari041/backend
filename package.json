@@ -8,7 +8,7 @@
     "build:check": "nest build && test -f dist/main.js || (echo 'Build failed: dist/main.js not found' && exit 1)",
     "start": "nest start",
     "start:dev": "nest start --watch",
-    "start:prod": "node dist/main.js",
+    "start:prod": "node ./dist/main.js",
     "migration:generate": "typeorm-ts-node-commonjs migration:generate",
     "migration:run": "typeorm-ts-node-commonjs migration:run"
   },
