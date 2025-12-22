@@ -5,6 +5,7 @@
   "main": "dist/main.js",
   "scripts": {
     "build": "nest build",
+    "build:check": "nest build && test -f dist/main.js || (echo 'Build failed: dist/main.js not found' && exit 1)",
     "start": "nest start",
     "start:dev": "nest start --watch",
     "start:prod": "node dist/main.js",
