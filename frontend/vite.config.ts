@@ -21,6 +21,7 @@ export default defineConfig({
     outDir: 'dist',
     assetsDir: 'assets',
     sourcemap: false,
+    minify: 'esbuild',
     rollupOptions: {
       output: {
         manualChunks: {
@@ -28,6 +29,9 @@ export default defineConfig({
         },
       },
     },
+  },
+  define: {
+    'process.env': {},
   },
 });
 
