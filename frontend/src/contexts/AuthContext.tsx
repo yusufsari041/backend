@@ -39,11 +39,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const login = async (email: string, sifre: string) => {
     const response = await authApi.login(email, sifre);
+    console.log('🔐 AuthContext login response:', response);
+    
+    // Response kontrolü - response direkt { token, user, requiresPasswordChange } formatında olmalı
+    if (!response || !response.token || !response.user) {
+      console.error('❌ Login response geçersiz:', response);
+      throw new Error('Login response geçersiz');
+    }
+    
+    // State ve localStorage'a kaydet
     setToken(response.token);
     setUser(response.user);
     setRequiresPasswordChange(response.requiresPasswordChange || false);
     localStorage.setItem('token', response.token);
     localStorage.setItem('user', JSON.stringify(response.user));
+    
+    console.log('✅ Token ve user kaydedildi');
     return { requiresPasswordChange: response.requiresPasswordChange || false };
   };
 

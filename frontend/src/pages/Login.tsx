@@ -107,16 +107,51 @@ const Login = () => {
 
     try {
       const result = await login(email.trim(), sifre);
+      console.log('✅ Login result:', result);
+      
+      // Token ve user kontrolü - localStorage'a kaydedildi mi?
+      const token = localStorage.getItem('token');
+      const user = localStorage.getItem('user');
+      console.log('🔑 Token kaydedildi mi?', !!token);
+      console.log('👤 User kaydedildi mi?', !!user);
+      
+      if (!token || !user) {
+        setError('Giriş başarılı ancak oturum bilgileri kaydedilemedi. Lütfen tekrar deneyin.');
+        setLoading(false);
+        return;
+      }
+      
       if (result.requiresPasswordChange) {
         setShowPasswordChange(true);
         setPasswordForm({ ...passwordForm, eski_sifre: sifre });
+        setLoading(false);
       } else {
-        navigate('/');
+        // Login başarılı - token ve user kaydedildi
+        console.log('🚀 Dashboard\'a yönlendiriliyor...');
+        
+        // Token ve user'ın kaydedildiğinden emin ol
+        const finalToken = localStorage.getItem('token');
+        const finalUser = localStorage.getItem('user');
+        
+        if (!finalToken || !finalUser) {
+          console.error('❌ Token veya user kaydedilemedi!');
+          setError('Oturum bilgileri kaydedilemedi. Lütfen tekrar deneyin.');
+          setLoading(false);
+          return;
+        }
+        
+        console.log('✅ Token ve user kaydedildi, yönlendiriliyor...');
+        
+        // State güncellenmesi için kısa bekleme, sonra direkt window.location kullan
+        // Navigate güvenilir değil, window.location daha güvenilir
+        setTimeout(() => {
+          console.log('🔄 window.location.href = "/" çağrılıyor...');
+          window.location.href = '/';
+        }, 150);
       }
     } catch (err: any) {
       const errorMessage = err.response?.data?.message || err.message || 'Giriş başarısız. Lütfen bilgilerinizi kontrol edin.';
       setError(errorMessage);
-    } finally {
       setLoading(false);
     }
   };

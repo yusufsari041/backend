@@ -3,24 +3,65 @@ import { toast } from 'react-toastify';
 import { Capacitor } from '@capacitor/core';
 
 const getApiUrl = () => {
-  const envUrl = import.meta.env.VITE_API_URL;
-  if (envUrl) return envUrl;
+  // Electron kontrolü - birden fazla yöntemle kontrol et
+  const isElectron = typeof window !== 'undefined' && (
+    (window as any).process?.type === 'renderer' ||
+    (window as any).electron ||
+    navigator.userAgent.toLowerCase().includes('electron')
+  );
   
-  if (Capacitor.isNativePlatform()) {
-    const savedUrl = localStorage.getItem('api_url');
-    if (savedUrl) return savedUrl;
-    
-    if (Capacitor.getPlatform() === 'android') {
-      const hostname = window.location.hostname;
-      if (hostname === '10.0.2.2' || hostname === 'localhost') {
-        return 'http://10.0.2.2:3001';
-      }
-    }
-    
-    return 'http://192.168.1.100:3001';
+  const isDev = import.meta.env.DEV || import.meta.env.MODE === 'development';
+  const hostname = typeof window !== 'undefined' ? window.location.hostname : '';
+  
+  console.log('🔍 Platform kontrolü:', {
+    isElectron,
+    isDev,
+    hostname,
+    userAgent: navigator.userAgent.toLowerCase().includes('electron'),
+    envUrl: import.meta.env.VITE_API_URL
+  });
+  
+  // Electron development modunda HER ZAMAN localhost backend kullan (environment variable'ı ignore et)
+  if (isElectron && isDev) {
+    console.log('🖥️ Electron development modu - localhost backend kullanılıyor (env variable ignore edildi)');
+    return 'http://localhost:3001';
   }
   
-  return 'http://localhost:3001';
+  // Capacitor (Android/iOS) kontrolü - ÖNCE BU KONTROL EDİLMELİ (environment variable'dan önce)
+  if (Capacitor.isNativePlatform()) {
+    console.log('📱 Native platform (Android/iOS) - Render.com backend kullanılıyor');
+    // localStorage'da kayıtlı URL varsa onu kullan (kullanıcı manuel değiştirmişse)
+    const savedUrl = localStorage.getItem('api_url');
+    if (savedUrl) {
+      console.log('💾 localStorage\'dan API URL:', savedUrl);
+      return savedUrl;
+    }
+    return 'https://backend-x49x.onrender.com';
+  }
+  
+  // localStorage'da kayıtlı URL varsa onu kullan (kullanıcı manuel değiştirmişse)
+  const savedUrl = localStorage.getItem('api_url');
+  if (savedUrl) {
+    console.log('💾 localStorage\'dan API URL:', savedUrl);
+    return savedUrl;
+  }
+  
+  // Environment variable kontrol et (Electron değilse, Capacitor değilse)
+  const envUrl = import.meta.env.VITE_API_URL;
+  if (envUrl) {
+    console.log('🌍 Environment variable\'dan API URL:', envUrl);
+    return envUrl;
+  }
+  
+  // Web browser - development localhost, production Render.com
+  if (isDev || hostname === 'localhost' || hostname === '127.0.0.1') {
+    console.log('🌐 Web browser development - localhost backend kullanılıyor');
+    return 'http://localhost:3001';
+  }
+  
+  // Production - Render.com backend
+  console.log('☁️ Production - Render.com backend kullanılıyor');
+  return 'https://backend-x49x.onrender.com';
 };
 
 const API_URL = getApiUrl();
@@ -46,12 +87,26 @@ api.interceptors.request.use((config) => {
 
 api.interceptors.response.use(
   (response) => {
+    console.log('📦 API Response:', response.data);
+    
+    // Backend TransformInterceptor response'u { success: true, data: {...} } formatına çeviriyor
+    // response.data = { success: true, data: {...} }
     if (response.data?.success === false) {
       const message = response.data.message || 'Bir hata oluştu';
       toast.error(message);
       return Promise.reject(new Error(message));
     }
-    return response.data?.data !== undefined ? response.data : response;
+    
+    // Backend'den gelen format: { success: true, data: {...} }
+    // data içindeki değeri döndür
+    if (response.data && typeof response.data === 'object' && 'data' in response.data && response.data.success === true) {
+      console.log('✅ Response parse edildi:', response.data.data);
+      return response.data.data;
+    }
+    
+    // Eğer direkt data formatındaysa (fallback - backend interceptor çalışmamış olabilir)
+    console.log('⚠️ Direct data formatı kullanılıyor:', response.data);
+    return response.data;
   },
   (error: AxiosError<any>) => {
     if (error.response) {
@@ -100,27 +155,49 @@ api.interceptors.response.use(
 );
 
 // Retry mekanizması - Render free plan için backend uyanma süresi
-const retryRequest = async (requestFn: () => Promise<any>, maxRetries = 3, delay = 2000) => {
+const retryRequest = async (requestFn: () => Promise<any>, maxRetries = 4, delay = 2000) => {
   for (let i = 0; i < maxRetries; i++) {
     try {
       return await requestFn();
     } catch (error: any) {
       // Son deneme veya network hatası değilse direkt fırlat
-      if (i === maxRetries - 1 || !error.code || (error.code !== 'ECONNREFUSED' && error.code !== 'ERR_NETWORK' && error.code !== 'ETIMEDOUT')) {
+      const isNetworkError = error.code === 'ECONNREFUSED' || 
+                            error.code === 'ERR_NETWORK' || 
+                            error.code === 'ETIMEDOUT' ||
+                            error.code === 'ECONNABORTED' ||
+                            (error.response?.status >= 500 && error.response?.status < 600);
+      
+      if (i === maxRetries - 1 || !isNetworkError) {
         throw error;
       }
+      
       // Backend uyanıyor, bekle ve tekrar dene
       console.log(`🔄 Backend uyanıyor, ${delay/1000} saniye sonra tekrar deneniyor... (${i + 1}/${maxRetries})`);
       await new Promise(resolve => setTimeout(resolve, delay));
-      delay *= 1.5; // Her denemede bekleme süresini artır
+      delay *= 1.5; // Her denemede bekleme süresini artır (max 10 saniye)
+      if (delay > 10000) delay = 10000;
     }
   }
 };
 
 export const authApi = {
   login: async (email: string, sifre: string) => {
-    const response = await retryRequest(() => api.post('/auth/login', { email, sifre }));
-    return response.data || response;
+    try {
+      console.log('🔐 Login isteği gönderiliyor...', { email, apiUrl: API_URL });
+      const response = await retryRequest(() => api.post('/auth/login', { email, sifre }));
+      console.log('✅ Login başarılı:', response);
+      // Interceptor'dan sonra response zaten { token, user, requiresPasswordChange } formatında
+      return response;
+    } catch (error: any) {
+      console.error('❌ Login hatası:', error);
+      console.error('Hata detayları:', {
+        message: error.message,
+        response: error.response?.data,
+        status: error.response?.status,
+        code: error.code,
+      });
+      throw error;
+    }
   },
   register: async (ad_soyad: string, email: string, sifre: string, rol?: string) => {
     const response = await api.post('/auth/register', { ad_soyad, email, sifre, rol });
