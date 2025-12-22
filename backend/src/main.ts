@@ -19,16 +19,46 @@ async function bootstrap() {
   // CORS ayarları - Development ve Production için
   const allowedOrigins = process.env.FRONTEND_URL 
     ? process.env.FRONTEND_URL.split(',').map(url => url.trim())
-    : ['http://localhost:5173', 'http://localhost:3000', 'http://127.0.0.1:5173'];
+    : [
+        'http://localhost:5173', 
+        'http://localhost:3000', 
+        'http://127.0.0.1:5173',
+        'http://127.0.0.1:3000',
+        'http://[::1]:5173',
+        'http://[::1]:3000'
+      ];
   
   app.enableCors({
     origin: (origin, callback) => {
-      // Origin yoksa (Postman, mobile app gibi) veya allowed origins'de varsa izin ver
-      if (!origin || allowedOrigins.includes(origin) || process.env.NODE_ENV !== 'production') {
+      // Development ortamında tüm origin'lere izin ver (Windows uyumluluğu için)
+      if (process.env.NODE_ENV !== 'production') {
         callback(null, true);
-      } else {
-        callback(new Error('CORS policy violation'));
+        return;
       }
+      
+      // Production'da:
+      // 1. Origin yoksa (Electron, Android, Postman gibi native app'ler) -> İZİN VER
+      // 2. Allowed origins'de varsa -> İZİN VER
+      // 3. Render.com frontend'den geliyorsa -> İZİN VER
+      if (!origin) {
+        // Origin yok = Native app (Electron, Android, Postman)
+        callback(null, true);
+        return;
+      }
+      
+      if (allowedOrigins.includes(origin)) {
+        callback(null, true);
+        return;
+      }
+      
+      // Render.com frontend'den geliyorsa izin ver
+      if (origin.includes('onrender.com') || origin.includes('frontend-g5op.onrender.com')) {
+        callback(null, true);
+        return;
+      }
+      
+      console.warn(`CORS: İzin verilmeyen origin: ${origin}`);
+      callback(new Error('CORS policy violation'));
     },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
@@ -112,8 +142,26 @@ async function bootstrap() {
   
   // Start the server after database is ready
   const port = process.env.PORT || 3001;
-  await app.listen(port);
-  console.log(`Backend API çalışıyor: http://localhost:${port}`);
+  try {
+    await app.listen(port);
+    console.log(`Backend API çalışıyor: http://localhost:${port}`);
+  } catch (error: any) {
+    if (error?.code === 'EADDRINUSE') {
+      console.error('\n❌ HATA: Port zaten kullanımda!');
+      console.error(`Port ${port} başka bir süreç tarafından kullanılıyor.`);
+      console.error('\nÇözüm seçenekleri:');
+      console.error('1. Portu kullanan süreci sonlandırın:');
+      console.error(`   Windows: netstat -ano | findstr :${port}`);
+      console.error(`   Sonra: taskkill /PID <PID_NUMARASI> /F`);
+      console.error('\n2. Farklı bir port kullanın:');
+      console.error(`   PORT=3002 npm run start:dev`);
+      console.error('\n3. Tüm Node.js süreçlerini sonlandırın:');
+      console.error('   Windows: taskkill /F /IM node.exe');
+      process.exit(1);
+    } else {
+      throw error;
+    }
+  }
   
   const jwtSecret = process.env.JWT_SECRET || 'telefoncu-secret-key';
   if (jwtSecret === 'telefoncu-secret-key' && process.env.NODE_ENV === 'production') {
@@ -121,5 +169,8 @@ async function bootstrap() {
   }
 }
 
-bootstrap();
+bootstrap().catch((error) => {
+  console.error('Uygulama başlatılamadı:', error);
+  process.exit(1);
+});
 
